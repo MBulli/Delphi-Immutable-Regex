@@ -55,6 +55,8 @@ BEGIN
   VAR R := TRegEx.Create('\b((?<word>\w+)\s*)+(?<end>[.?!])');
   VAR M := R.FirstMatch('This is a sentence. This is a second sentence.');
 
+  Writeln(M.DebugDescriptionBrief);
+
   Assert.IsTrue(M.Success);
   Assert.AreEqual(Length('This is a sentence.'), M.Length);
   Assert.AreEqual('This is a sentence.', M.Value);
@@ -118,7 +120,10 @@ BEGIN
   VAR R := TRegEx.Create('.*');
   VAR M := R.Matches('hello');
 
-  // .* - Match 1: 0-10 hello; Match 2: 10-10 null
+  WriteLn(M[0].DebugDescriptionBrief(1));
+  WriteLn(M[1].DebugDescriptionBrief(2));
+
+  // .* - Match 1: 0-5 hello; Match 2: 5-5 null
   Assert.AreEqual(2, Length(M));
 
   TMatchAsserter.Create(M[0])
@@ -126,13 +131,11 @@ BEGIN
   .AssertHasValue('hello')
   .AssertStartLength(1, 5);
 
-  // TODO Store Length instead of Stop
-
   TMatchAsserter.Create(M[1])
   .AssertIsSuccess
   .AssertIsEmpty
   .AssertHasValue('')
-  .AssertStartLength(5, 0);
+  .AssertStartLength(6, 0);
 
 
   VAR M2 := System.RegularExpressions.TRegEx.Matches('hello', '.*');

@@ -109,14 +109,14 @@ END;
 
 TYPE TRegExCapture = RECORD
   PRIVATE
-    FName       : STRING;
-    FStartIndex : Integer;
-    FStopIndex  : Integer;
+    FName     : STRING;
+    FStartPos : Integer;
+    FLength   : Integer;
 
   PUBLIC
-    PROPERTY Name  : STRING  READ FName;
-    PROPERTY Start : Integer READ FStartIndex;
-    PROPERTY Stop  : Integer READ FStopIndex;
+    PROPERTY Name   : STRING  READ FName;
+    PROPERTY Start  : Integer READ FStartPos;
+    PROPERTY Length : Integer READ FLength;
 END;
 
 
@@ -148,7 +148,8 @@ TYPE TRegExMatch = RECORD
     FUNCTION GroupNames : TArray<STRING>; // The names of the captured groups in the match.
     FUNCTION GroupName (GroupIndex : Integer) : STRING;
 
-    FUNCTION DebugDescription : STRING;
+    FUNCTION DebugDescription      : STRING;
+    FUNCTION DebugDescriptionBrief(MatchNum : INTEGER = 1) : STRING;
 END;
 
 
@@ -246,36 +247,23 @@ TYPE PCREString = UnicodeString;
 TYPE PCREOffsetList = ARRAY[0..(MAX_SUBEXPRESSIONS+1)*3] OF Integer;
 TYPE PPCREOffsetList = ^PCREOffsetList;
 
-FUNCTION GetSubString(CONST Input        : STRING;
-                            Offsets      : PCREOffsetList;
-                            StringCount  : Integer;
-                            StringNumber : Integer) : STRING;
-BEGIN
-  IF (StringNumber < 0) OR (StringNumber >= StringCount) THEN BEGIN
-    RAISE Exception.Create('');
-  END;
-
-  StringNumber := StringNumber*2;
-  VAR StartPos := Offsets[StringNumber  ];
-  VAR EndPos   := Offsets[StringNumber+1];
-  VAR Len      := EndPos - StartPos;
-
-  Result := Copy(Input, StartPos+1, Len);
-END;
 
 PROCEDURE GetSubStringPos(    Offsets      : PCREOffsetList;
                               StringCount  : Integer;
                               StringNumber : Integer;
                           VAR StartPos     : Integer;
-                          VAR EndPos       : Integer);
+                          VAR Length       : Integer);
 BEGIN
   IF (StringNumber < 0) OR (StringNumber >= StringCount) THEN BEGIN
-    RAISE Exception.Create('');
+    RAISE EArgumentOutOfRangeException.Create('GetSubStringPos: StringNumber out of range.');
   END;
 
   StringNumber := StringNumber*2;
-  StartPos     := Offsets[StringNumber  ];
-  EndPos       := Offsets[StringNumber+1];
+  VAR StartIdx := Offsets[StringNumber  ];  // zero-based string index
+  VAR StopIdx  := Offsets[StringNumber+1];  // zero-based string index
+
+  StartPos := StartIdx + 1; // one-based string index
+  Length   := StopIdx - StartIdx;
 END;
 
 
@@ -470,6 +458,9 @@ END;
 
 FUNCTION TRegExImpl.FirstMatch(CONST Input : STRING; StartPos : Integer) : TRegExMatch;
 BEGIN
+  IF NOT IsCompiled THEN RAISE EInvalidOperation.Create('RegEx must be compiled before matched against the input string.');
+  IF NOT InRange(StartPos, 1, Length(Input)) THEN RAISE EArgumentOutOfRangeException.Create(Format('Argument StartPos=%d exceeds Input length=%d', [StartPos, Length(Input)]));
+
   Match(Input, Result, StartPos);
 END;
 
@@ -555,9 +546,6 @@ END;
 
 FUNCTION TRegExImpl.Match(CONST Input : STRING; VAR Output : TRegExMatch; StartPos, Options : Integer) : Integer;
 BEGIN
-  IF NOT IsCompiled THEN RAISE EInvalidOperation.Create('RegEx must be compiled before matched against the input string.');
-//  IF NOT InRange(StartPos, 1, Length(Input)) THEN RAISE EArgumentOutOfRangeException.Create(Format('Argument StartPos=%d exceeds Input length=%d', [StartPos, Length(Input)]));
-
   Output := Default(TRegExMatch);
   Output.FSource     := self.FSource;
   Output.FInput      := Input;
@@ -572,7 +560,7 @@ BEGIN
     SetLength(Output.FCaptures, OffsetCount);
 
     FOR VAR I := 0 TO OffsetCount-1 DO BEGIN
-      GetSubStringPos(Offsets, OffsetCount, I, Output.FCaptures[I].FStartIndex, Output.FCaptures[I].FStopIndex);
+      GetSubStringPos(Offsets, OffsetCount, I, Output.FCaptures[I].FStartPos, Output.FCaptures[I].FLength);
     END;
 
     VAR NameCount := 0;
@@ -604,7 +592,7 @@ FUNCTION TRegExMatch.Start: Integer;
 BEGIN
   IF NOT Success THEN EXIT(0);
 
-  Result := FCaptures[0].FStartIndex+1;
+  Result := FCaptures[0].FStartPos;
 END;
 
 
@@ -612,7 +600,21 @@ FUNCTION TRegExMatch.Stop: Integer;
 BEGIN
   IF NOT Success THEN EXIT(0);
 
-  Result := FCaptures[0].FStopIndex+1;
+  Result := FCaptures[0].FStartPos + FCaptures[0].FLength;
+END;
+
+
+FUNCTION TRegExMatch.Length: Integer;
+BEGIN
+  IF NOT Success THEN EXIT(0);
+
+  Result := FCaptures[0].FLength
+END;
+
+
+FUNCTION TRegExMatch.Value: STRING;
+BEGIN
+  Result := Group(0);
 END;
 
 
@@ -628,25 +630,11 @@ BEGIN
 END;
 
 
-FUNCTION TRegExMatch.Length: Integer;
-BEGIN
-  IF NOT Success THEN EXIT(0);
-
-  Result := FCaptures[0].FStopIndex - FCaptures[0].FStartIndex;
-END;
-
-
-FUNCTION TRegExMatch.Value: STRING;
-BEGIN
-  Result := Group(0);
-END;
-
-
 FUNCTION TRegExMatch.IsEmpty: BOOLEAN;
 BEGIN
   IF NOT Success THEN EXIT(FALSE);
 
-  Result := (FCaptures[0].FStopIndex = FCaptures[0].FStartIndex);
+  Result := (FCaptures[0].FLength = 0);
 END;
 
 
@@ -655,11 +643,10 @@ BEGIN
   IF NOT Success THEN EXIT('');
   IF NOT InRange(GroupIndex, 0, System.Length(FCaptures)) THEN RAISE EArgumentOutOfRangeException.Create('');
 
-  VAR Start := FCaptures[GroupIndex].FStartIndex;
-  VAR Stop  := FCaptures[GroupIndex].FStopIndex;
-  VAR Len   := Stop - Start;
+  VAR Start := FCaptures[GroupIndex].FStartPos;
+  VAR Len   := FCaptures[GroupIndex].FLength;
 
-  Result := Copy(FInput, Start+1, Len);
+  Result := Copy(FInput, Start, Len);
 END;
 
 
@@ -724,7 +711,41 @@ BEGIN
       Name := ' (' + Name + ')';
     END;
 
-    Result := Result + Format('  Group %d%s: "%s"', [GrpNum, Name, self.Group(GrpNum)]) + sLineBreak;
+    Result := Result + Format('  Group %d%s: %d-%d "%s"',
+                                 [GrpNum,
+                                  Name,
+                                  self.FCaptures[0].FStartPos,
+                                  self.FCaptures[0].FStartPos+self.FCaptures[0].FLength,
+                                  self.Group(GrpNum)])
+             + sLineBreak;
+  END;
+
+  Result := Trim(Result);
+END;
+
+
+FUNCTION TRegExMatch.DebugDescriptionBrief(MatchNum : INTEGER) : STRING;
+BEGIN
+  FOR VAR GrpNum := 0 TO GroupCount-1 DO BEGIN
+    VAR Name := '';
+
+    IF GrpNum = 0 THEN BEGIN
+      Name := Format('Match %d', [MatchNum]);
+    END
+    ELSE IF GroupName(GrpNum) <> '' THEN BEGIN
+      Name := Format('Group %s', [GroupName(GrpNum)]);
+    END
+    ELSE BEGIN
+      Name := Format('Group %d', [GrpNum]);
+    END;
+
+    VAR Line := Format('%s %d-%d : "%s"',
+                      [Name,
+                       self.FCaptures[0].FStartPos,
+                       self.FCaptures[0].FStartPos+self.FCaptures[0].FLength,
+                       Group(GrpNum)]);
+
+    Result := Result + Line + sLineBreak;
   END;
 
   Result := Trim(Result);
