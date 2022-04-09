@@ -5,7 +5,7 @@ INTERFACE
 USES
   DUnitX.TestFramework,
   System.RegularExpressions,
-  ThreadsafeRegex;
+  ImmutableRegex;
 
 TYPE
   [TestFixture]

@@ -1,4 +1,4 @@
-﻿program DelphiThreadsafeRegex;
+﻿program DelphiImmutableRegex;
 
 {$APPTYPE CONSOLE}
 
@@ -6,8 +6,7 @@
 
 uses
   System.SysUtils,
-  ThreadsafeRegex in 'ThreadsafeRegex.pas';
-
+  ImmutableRegex in 'ImmutableRegex.pas';
 
 procedure PrintMatch(M : TRegExMatch);
 begin

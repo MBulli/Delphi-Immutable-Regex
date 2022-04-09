@@ -1,4 +1,4 @@
-﻿program ThreadsafeRegexTests;
+﻿program ImmutableRegexTests;
 
 {$IFNDEF TESTINSIGHT}
 {$APPTYPE CONSOLE}
@@ -14,7 +14,7 @@ uses
   {$ENDIF }
   DUnitX.TestFramework,
   Unit1 in 'Unit1.pas',
-  ThreadsafeRegex in '..\ThreadsafeRegex.pas';
+  ImmutableRegex in '..\ImmutableRegex.pas';
 
 {$IFNDEF TESTINSIGHT}
 var

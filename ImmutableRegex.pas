@@ -1,4 +1,4 @@
-﻿UNIT ThreadsafeRegex;
+﻿UNIT ImmutableRegex;
 
 INTERFACE
 
@@ -11,10 +11,11 @@ USES
 
   // TODO GetEnumerator -> NextMatch
   // TODO Matches
+  // TODO Split/Replace
   // TODO Unit Tests
 
 {$IFNDEF MSWINDOWS}
-{$Message Fatal 'ThreadsafeRegex currently supports only UTF16 and thus Windows.'}
+{$Message Fatal 'ImmutableRegex currently supports only UTF16 and thus Windows.'}
 {$ENDIF}
 
 {$SCOPEDENUMS ON}

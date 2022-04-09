@@ -1,0 +1,48 @@
+﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <PropertyGroup>
+        <ProjectGuid>{41609D77-6205-48F5-8A6B-3AA4A01B6325}</ProjectGuid>
+    </PropertyGroup>
+    <ItemGroup>
+        <Projects Include="DelphiImmutableRegex.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="Tests\ImmutableRegexTests.dproj">
+            <Dependencies/>
+        </Projects>
+    </ItemGroup>
+    <ProjectExtensions>
+        <Borland.Personality>Default.Personality.12</Borland.Personality>
+        <Borland.ProjectType/>
+        <BorlandProject>
+            <Default.Personality/>
+        </BorlandProject>
+    </ProjectExtensions>
+    <Target Name="DelphiImmutableRegex">
+        <MSBuild Projects="DelphiImmutableRegex.dproj"/>
+    </Target>
+    <Target Name="DelphiImmutableRegex:Clean">
+        <MSBuild Projects="DelphiImmutableRegex.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="DelphiImmutableRegex:Make">
+        <MSBuild Projects="DelphiImmutableRegex.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="ImmutableRegexTests">
+        <MSBuild Projects="Tests\ImmutableRegexTests.dproj"/>
+    </Target>
+    <Target Name="ImmutableRegexTests:Clean">
+        <MSBuild Projects="Tests\ImmutableRegexTests.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="ImmutableRegexTests:Make">
+        <MSBuild Projects="Tests\ImmutableRegexTests.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="Build">
+        <CallTarget Targets="DelphiImmutableRegex;ImmutableRegexTests"/>
+    </Target>
+    <Target Name="Clean">
+        <CallTarget Targets="DelphiImmutableRegex:Clean;ImmutableRegexTests:Clean"/>
+    </Target>
+    <Target Name="Make">
+        <CallTarget Targets="DelphiImmutableRegex:Make;ImmutableRegexTests:Make"/>
+    </Target>
+    <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
+</Project>
