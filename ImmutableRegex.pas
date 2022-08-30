@@ -121,6 +121,27 @@ TYPE TRegExCapture = RECORD
 END;
 
 
+TYPE TRegExGroup = RECORD
+  PRIVATE
+    FName     : STRING;
+    FValue    : STRING;
+
+    FStart    : Integer;
+    FLength   : Integer;
+
+    FSuccess  : BOOLEAN; // True if the owning TRegExMatch was successfull
+
+  PUBLIC
+    PROPERTY Success : BOOLEAN READ FSuccess;
+    PROPERTY Name    : STRING  READ FName;
+    PROPERTY Value   : STRING  READ FValue;
+
+    PROPERTY Start   : Integer READ FStart;
+    PROPERTY Length  : Integer READ FLength;
+    FUNCTION Stop    : Integer;
+
+END;
+
 TYPE TRegExMatch = RECORD
   PRIVATE
     FSource   : STRING;
@@ -141,10 +162,10 @@ TYPE TRegExMatch = RECORD
 
     FUNCTION GroupCount : Integer; // Returns the number of captured groups in the match.
 
-    FUNCTION Group (      GroupIndex : Integer) : STRING;  {O(1)}               OVERLOAD;
-    FUNCTION Group (CONST GroupName  : STRING ) : STRING;  {O(N)}               OVERLOAD;
+    FUNCTION Group (      GroupIndex : Integer) : TRegExGroup;  {O(1)}               OVERLOAD;
+    FUNCTION Group (CONST GroupName  : STRING ) : TRegExGroup;  {O(N)}               OVERLOAD;
 
-    FUNCTION Groups(CONST GroupNums  : IEnumerable<Integer>) : TArray<STRING>;
+    FUNCTION Groups(CONST GroupNums  : IEnumerable<Integer>) : TArray<TRegExGroup>;
 
     FUNCTION GroupNames : TArray<STRING>; // The names of the captured groups in the match.
     FUNCTION GroupName (GroupIndex : Integer) : STRING;
@@ -615,7 +636,7 @@ END;
 
 FUNCTION TRegExMatch.Value: STRING;
 BEGIN
-  Result := Group(0);
+  Result := Group(0).Value;
 END;
 
 
@@ -639,19 +660,22 @@ BEGIN
 END;
 
 
-FUNCTION TRegExMatch.Group(GroupIndex : Integer) : STRING;
+FUNCTION TRegExMatch.Group(GroupIndex : Integer) : TRegExGroup;
 BEGIN
-  IF NOT Success THEN EXIT('');
+  Result := Default(TRegExGroup);
+
+  IF NOT Success THEN EXIT;
   IF NOT InRange(GroupIndex, 0, System.Length(FCaptures)) THEN RAISE EArgumentOutOfRangeException.Create('');
 
-  VAR Start := FCaptures[GroupIndex].FStartPos;
-  VAR Len   := FCaptures[GroupIndex].FLength;
-
-  Result := Copy(FInput, Start, Len);
+  Result.FName    := FCaptures[GroupIndex].FName;
+  Result.FStart   := FCaptures[GroupIndex].FStartPos;
+  Result.FLength  := FCaptures[GroupIndex].FLength;
+  Result.FValue   := Copy(FInput, Result.FStart, Result.FLength);
+  Result.FSuccess := self.Success;
 END;
 
 
-FUNCTION TRegExMatch.Group (CONST GroupName : STRING ) : STRING;
+FUNCTION TRegExMatch.Group (CONST GroupName : STRING ) : TRegExGroup;
 BEGIN
   FOR VAR I := 0 TO System.Length(FCaptures)-1 DO BEGIN
     IF FCaptures[I].FName = GroupName THEN BEGIN
@@ -661,7 +685,7 @@ BEGIN
 END;
 
 
-FUNCTION TRegExMatch.Groups(CONST GroupNums : IEnumerable<Integer>) : TArray<STRING>;
+FUNCTION TRegExMatch.Groups(CONST GroupNums : IEnumerable<Integer>) : TArray<TRegExGroup>;
 BEGIN
   IF NOT Success THEN EXIT;
 
@@ -715,9 +739,9 @@ BEGIN
     Result := Result + Format('  Group %d%s: %d-%d "%s"',
                                  [GrpNum,
                                   Name,
-                                  self.FCaptures[0].FStartPos,
-                                  self.FCaptures[0].FStartPos+self.FCaptures[0].FLength,
-                                  self.Group(GrpNum)])
+                                  Group(GrpNum).Start,
+                                  Group(GrpNum).Stop,
+                                  Group(GrpNum).Value])
              + sLineBreak;
   END;
 
@@ -742,14 +766,21 @@ BEGIN
 
     VAR Line := Format('%s %d-%d : "%s"',
                       [Name,
-                       self.FCaptures[0].FStartPos,
-                       self.FCaptures[0].FStartPos+self.FCaptures[0].FLength,
-                       Group(GrpNum)]);
+                       Group(GrpNum).Start,
+                       Group(GrpNum).Stop,
+                       Group(GrpNum).Value]);
 
     Result := Result + Line + sLineBreak;
   END;
 
   Result := Trim(Result);
+END;
+
+{ TRegExGroup }
+
+FUNCTION TRegExGroup.Stop: Integer;
+BEGIN
+  Result := FStart + FLength;
 END;
 
 END.

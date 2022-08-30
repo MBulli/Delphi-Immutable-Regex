@@ -50,6 +50,45 @@ TYPE TMatchAsserter = RECORD
 END;
 
 
+
+PROCEDURE CompareAllMatches(CONST Pattern : STRING;
+                            CONST Input   : STRING);
+BEGIN
+  VAR RI := TRegEx.Create(Pattern);
+  VAR RD := System.RegularExpressions.TRegEx.Create(Pattern);
+
+  VAR MI := RI.Matches(Input);
+  VAR MD := RD.Matches(Input);
+
+  Assert.AreEqual(MD.Count, Length(MI));
+
+  FOR VAR I := 0 TO MD.Count-1 DO BEGIN
+
+    VAR A := MD[I];
+    VAR B := MI[I];
+
+    Assert.AreEqual(A.Index,          B.Start);
+    Assert.AreEqual(A.Length,         B.Length);
+    Assert.AreEqual(A.Index+A.Length, B.Stop);
+    Assert.AreEqual(A.Success,        B.Success);
+    Assert.AreEqual(A.Value,          B.Value);
+
+    Assert.AreEqual(A.Groups.Count, B.GroupCount);
+
+    FOR VAR J := 0 TO A.Groups.Count-1 DO BEGIN
+      VAR GA := A.Groups[J];
+      VAR GB := B.Group(J);
+
+      Assert.AreEqual(GA.Index,          GB.Start);
+      Assert.AreEqual(GA.Length,         GB.Length);
+      Assert.AreEqual(GA.Index+A.Length, GB.Stop);
+      Assert.AreEqual(GA.Success,        GB.Success);
+      Assert.AreEqual(GA.Value,          GB.Value);
+    END;
+  END;
+END;
+
+
 PROCEDURE TImmutableRegExTest.Test1;
 BEGIN
   VAR R := TRegEx.Create('\b((?<word>\w+)\s*)+(?<end>[.?!])');
@@ -62,13 +101,13 @@ BEGIN
   Assert.AreEqual('This is a sentence.', M.Value);
   Assert.AreEqual(4, M.GroupCount);
 
-  Assert.AreEqual('This is a sentence.', M.Group(0));
-  Assert.AreEqual('sentence', M.Group(1));
-  Assert.AreEqual('sentence', M.Group(2));
-  Assert.AreEqual('.', M.Group(3));
+  Assert.AreEqual('This is a sentence.', M.Group(0).Value);
+  Assert.AreEqual('sentence', M.Group(1).Value);
+  Assert.AreEqual('sentence', M.Group(2).Value);
+  Assert.AreEqual('.', M.Group(3).Value);
 
-  Assert.AreEqual('sentence', M.Group('word'));
-  Assert.AreEqual('.', M.Group('end'));
+  Assert.AreEqual('sentence', M.Group('word').Value);
+  Assert.AreEqual('.', M.Group('end').Value);
 END;
 
 
@@ -112,6 +151,7 @@ BEGIN
 //  VAR M := R.Matches('hello hello hello hello');
 
   // .* - Match 1: 0-10 helloworld; Match 2: 10-10 null
+  CompareAllMatches('hello', 'hello hello hello hello');
 END;
 
 
