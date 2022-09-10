@@ -21,7 +21,9 @@ USES
 
 {$SCOPEDENUMS ON}
 
-TYPE TRegExCreation = (NOP, Compile, CompileAndStudy);
+TYPE TRegExCreation = (NOP, Compile, CompileAndStudy, JitCompile, JitCompilePartialSoft, JitCompilePartialHard);
+
+TYPE TRegExStudyOptions = (None, JitNormal, JitPartialSoft, JitPartialHard);
 
   // Copied from TPerlRegExOptions
 TYPE TRegExOptions = set of (
@@ -192,9 +194,10 @@ TYPE IRegEx = INTERFACE
 
   FUNCTION IsCompiled : BOOLEAN;
   FUNCTION IsStudied  : BOOLEAN;
+  FUNCTION IsJited    : BOOLEAN;
 
-  PROCEDURE Compile; // Compiles the pattern
-  PROCEDURE Study;   // Studies the pattern and compiles it first if required
+  PROCEDURE Compile;                               // Compiles the pattern
+  PROCEDURE Study(Options : TRegExStudyOptions);   // Studies the pattern and compiles it first if required
 
   FUNCTION IsMatch(CONST Input : STRING) : BOOLEAN; OVERLOAD;
   FUNCTION IsMatch(CONST Input : STRING; StartPos : Integer) : BOOLEAN; OVERLOAD;
@@ -249,9 +252,10 @@ TYPE TRegExImpl = CLASS(TInterfacedObject, IRegEx)
 
     FUNCTION IsCompiled : BOOLEAN;
     FUNCTION IsStudied  : BOOLEAN;
+    FUNCTION IsJited    : BOOLEAN;
 
     PROCEDURE Compile;
-    PROCEDURE Study;
+    PROCEDURE Study(Options : TRegExStudyOptions);
 
     FUNCTION IsMatch(CONST Input : STRING) : BOOLEAN; OVERLOAD;
     FUNCTION IsMatch(CONST Input : STRING; StartPos : Integer) : BOOLEAN; OVERLOAD;
@@ -374,8 +378,11 @@ BEGIN
   FOptions := Options;
 
   CASE CompileOnCreate OF
-    TRegExCreation.Compile : Compile;
-    TRegExCreation.CompileAndStudy : Study;
+    TRegExCreation.Compile               : Compile;
+    TRegExCreation.CompileAndStudy       : Study(TRegExStudyOptions.None);
+    TRegExCreation.JitCompile            : Study(TRegExStudyOptions.JitNormal);
+    TRegExCreation.JitCompilePartialSoft : Study(TRegExStudyOptions.JitPartialSoft);
+    TRegExCreation.JitCompilePartialHard : Study(TRegExStudyOptions.JitPartialHard);
   END;
 END;
 
@@ -394,22 +401,42 @@ BEGIN
 END;
 
 
+FUNCTION TRegExImpl.IsJited: BOOLEAN;
+BEGIN
+  IF NOT IsCompiled THEN EXIT(FALSE);
+
+  VAR Tmp := 0;
+  VAR RC := pcre_fullinfo(FPattern, FHints, PCRE_INFO_JIT, @Tmp);
+
+  Result := (RC = 0) AND (Tmp = 1);
+END;
+
+
 FUNCTION TRegExImpl.IsStudied: BOOLEAN;
 BEGIN
   Result := FHints <> NIL;
 END;
 
 
-PROCEDURE TRegExImpl.Study;
+PROCEDURE TRegExImpl.Study(Options : TRegExStudyOptions);
 BEGIN
   IF IsStudied THEN EXIT;
   IF NOT IsCompiled THEN BEGIN
     Compile;
   END;
 
+  VAR PcreOptions := 0;
+
+  CASE Options OF
+    TRegExStudyOptions.None           : PcreOptions := 0;
+    TRegExStudyOptions.JitNormal      : PcreOptions := PCRE_STUDY_JIT_COMPILE;
+    TRegExStudyOptions.JitPartialSoft : PcreOptions := PCRE_STUDY_JIT_PARTIAL_SOFT_COMPILE;
+    TRegExStudyOptions.JitPartialHard : PcreOptions := PCRE_STUDY_JIT_PARTIAL_HARD_COMPILE;
+  END;
+
   VAR Error : MarshaledAString;
 
-  FHints := pcre_study(FPattern, 0, @Error);
+  FHints := pcre_study(FPattern, PcreOptions, @Error);
 
   IF Error <> NIL THEN RAISE Exception.CreateFmt('Failed to study RegEx with error "%s".', [STRING(Error)]);
 END;
