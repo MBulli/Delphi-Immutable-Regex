@@ -13,6 +13,7 @@ USES
   // TODO Matches
   // TODO Split/Replace
   // TODO Unit Tests
+  // TODO Timeout feature with callbacks?
 
 {$IFNDEF MSWINDOWS}
 {$Message Fatal 'ImmutableRegex currently supports only UTF16 and thus Windows.'}
@@ -158,7 +159,7 @@ TYPE TRegExMatch = RECORD
     FUNCTION Stop    : Integer; // The index in the string after the last character of the match.
     FUNCTION Length  : Integer;
     FUNCTION Value   : STRING;
-    FUNCTION IsEmpty : BOOLEAN;
+    FUNCTION IsEmpty : BOOLEAN;       // TODO remove as the function is inconclusive if self.Success=FALSE
 
     FUNCTION GroupCount : Integer; // Returns the number of captured groups in the match.
 
@@ -516,12 +517,14 @@ BEGIN
   WHILE True DO BEGIN
     VAR Options := 0;
 
-    StartOffset := LastMatch.Stop;
+    IF LastMatch.Success THEN BEGIN
+      StartOffset := LastMatch.Stop; // Start at end of previous match
+    END;
 
     // If the previous match was for an empty string, we are finished if we are
     // at the end of the subject. Otherwise, arrange to run another match at the
     // same point to see if a non-empty match can be found.
-    IF LastMatch.IsEmpty THEN BEGIN
+    IF LastMatch.Success AND (LastMatch.Length = 0) THEN BEGIN
       IF LastMatch.Start = Length(Input)+1 THEN BEGIN
         BREAK;
       END;
@@ -654,7 +657,7 @@ END;
 
 FUNCTION TRegExMatch.IsEmpty: BOOLEAN;
 BEGIN
-  IF NOT Success THEN EXIT(FALSE);
+  IF NOT Success THEN EXIT(TRUE);
 
   Result := (FCaptures[0].FLength = 0);
 END;
@@ -677,6 +680,8 @@ END;
 
 FUNCTION TRegExMatch.Group (CONST GroupName : STRING ) : TRegExGroup;
 BEGIN
+  Result := Default(TRegExGroup);
+
   FOR VAR I := 0 TO System.Length(FCaptures)-1 DO BEGIN
     IF FCaptures[I].FName = GroupName THEN BEGIN
       EXIT(self.Group(I));

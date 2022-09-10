@@ -33,9 +33,36 @@ TYPE
 
     [Test]
     PROCEDURE TestStartOffset;
+
+
+    [Test]
+    PROCEDURE TestZeroLengthMatches;
+
+    [Test]
+    PROCEDURE TestZeroLengthMatches2;
+
+    [Test]
+    PROCEDURE TestEmptyMatchGroup;
   END;
 
 IMPLEMENTATION
+
+TYPE TGroupAsserter = RECORD
+  STRICT PRIVATE
+    FTheGroup : TRegExGroup;
+
+  PUBLIC
+    CONSTRUCTOR Create(AMatch : TRegExGroup);
+
+    FUNCTION AssertIsSuccess  (SuccessExpected : BOOLEAN = TRUE) : TGroupAsserter;
+    FUNCTION AssertHasValue   (CONST ValueExpected : STRING) : TGroupAsserter;
+    FUNCTION AssertStartLength(StartExpected, LengthExpected : Integer) : TGroupAsserter;
+
+    FUNCTION AssertIsZeroLengthAt(      StartExpected : Integer) : TGroupAsserter;
+    FUNCTION AssertMatchAt       (      StartExpected : Integer;
+                                  CONST ValueExpected : STRING) : TGroupAsserter;
+END;
+
 
 TYPE TMatchAsserter = RECORD
   STRICT PRIVATE
@@ -47,6 +74,14 @@ TYPE TMatchAsserter = RECORD
     FUNCTION AssertIsEmpty    (EmptyExpected   : BOOLEAN = TRUE) : TMatchAsserter;
     FUNCTION AssertHasValue   (CONST ValueExpected : STRING) : TMatchAsserter;
     FUNCTION AssertStartLength(StartExpected, LengthExpected : Integer) : TMatchAsserter;
+
+    FUNCTION AssertIsZeroLengthAt(      StartExpected : Integer) : TMatchAsserter;
+    FUNCTION AssertMatchAt       (      StartExpected : Integer;
+                                  CONST ValueExpected : STRING) : TMatchAsserter;
+
+    FUNCTION AssertHasGroup(      GroupIndex : Integer) : TGroupAsserter;  OVERLOAD;
+    FUNCTION AssertHasGroup(CONST GroupName  : STRING ) : TGroupAsserter;  OVERLOAD;
+
 END;
 
 
@@ -203,6 +238,73 @@ BEGIN
   Assert.AreEqual('world', M.Value);
 END;
 
+PROCEDURE TImmutableRegExTest.TestZeroLengthMatches;
+BEGIN
+  // see https://www.regular-expressions.info/zerolength.html
+
+  // Delphi actually returns a empty list in these cases ...
+  // We stick to the behavior of PCRE (and .Net)
+
+  // Match 1 0-0 null
+  // Match 2 1-1 null
+  // Match 3 2-2 null
+  // Match 4 3-3 null
+  VAR R := TRegEx.Create('\d*');
+
+  VAR Matches := R.Matches('abc');
+  Assert.AreEqual(4, Length(Matches));
+
+  FOR VAR I := 0 TO Length(Matches)-1 DO BEGIN
+    TMatchAsserter.Create(Matches[I])
+    .AssertIsZeroLengthAt(I+1);
+  END;
+END;
+
+
+PROCEDURE TImmutableRegExTest.TestZeroLengthMatches2;
+BEGIN
+  // Delphi returns [] see TestZeroLengthMatches
+  // Match 1 0-0 null
+  // Match 2 0-1 x
+  // Match 3 1-2 1
+  // Match 4 2-2 null
+  VAR R := TRegEx.Create('\d*|x');
+
+  VAR Matches := R.Matches('x1');
+  Assert.AreEqual(4, Length(Matches));
+
+  TMatchAsserter.Create(Matches[0]).AssertIsZeroLengthAt(1);
+  TMatchAsserter.Create(Matches[1]).AssertMatchAt(1, 'x');
+  TMatchAsserter.Create(Matches[2]).AssertMatchAt(2, '1');
+  TMatchAsserter.Create(Matches[3]).AssertIsZeroLengthAt(3);
+END;
+
+PROCEDURE TImmutableRegExTest.TestEmptyMatchGroup;
+BEGIN
+  // Delphi returns [] see TestZeroLengthMatches
+  // Match 1 0-0 null
+  //  Group 1 0-0 null
+  // Match 2 1-1 null
+  //  Group 1 1-1 null
+  // Match 3 2-2 null
+  //  Group 1 2-2 null
+  VAR R := TRegEx.Create('()');
+
+  VAR Matches := R.Matches('x1');
+  Assert.AreEqual(3, Length(Matches));
+
+  Assert.AreEqual(2, Matches[0].GroupCount);
+  Assert.AreEqual(2, Matches[1].GroupCount);
+  Assert.AreEqual(2, Matches[2].GroupCount);
+
+  WriteLn(R.FirstMatch('abc').DebugDescription);
+
+  TMatchAsserter.Create(Matches[0]).AssertIsZeroLengthAt(1).AssertHasGroup(1).AssertIsZeroLengthAt(1);
+  TMatchAsserter.Create(Matches[1]).AssertIsZeroLengthAt(2).AssertHasGroup(1).AssertIsZeroLengthAt(2);
+  TMatchAsserter.Create(Matches[2]).AssertIsZeroLengthAt(3).AssertHasGroup(1).AssertIsZeroLengthAt(3);
+
+END;
+
 // <(.*?)>
 // This is <something> <something else> <something further> no more
 // Match 1 8-19  <something>
@@ -222,11 +324,28 @@ END;
 // Match 1 2-3 c
 // Match 1 3-3 null
 
+
 { TMatchAsserter }
 
 CONSTRUCTOR TMatchAsserter.Create(AMatch: TRegExMatch);
 BEGIN
   FTheMatch := AMatch;
+END;
+
+
+FUNCTION TMatchAsserter.AssertHasGroup(GroupIndex: Integer): TGroupAsserter;
+BEGIN
+  // TODO Add actual assert logic like range check?
+  VAR Grp := FTheMatch.Group(GroupIndex);
+  Result := TGroupAsserter.Create(Grp);
+END;
+
+
+FUNCTION TMatchAsserter.AssertHasGroup(CONST GroupName: STRING): TGroupAsserter;
+BEGIN
+  // TODO Add actual assert logic like range check?
+  VAR Grp := FTheMatch.Group(GroupName);
+  Result := TGroupAsserter.Create(Grp);
 END;
 
 
@@ -254,6 +373,26 @@ BEGIN
 END;
 
 
+FUNCTION TMatchAsserter.AssertIsZeroLengthAt(StartExpected : Integer) : TMatchAsserter;
+BEGIN
+  self.AssertIsSuccess;
+  self.AssertStartLength(StartExpected, 0);
+  self.AssertHasValue('');
+
+  Result := Self;
+END;
+
+
+FUNCTION TMatchAsserter.AssertMatchAt(StartExpected: Integer; CONST ValueExpected: STRING): TMatchAsserter;
+BEGIN
+  self.AssertIsSuccess;
+  self.AssertStartLength(StartExpected, Length(ValueExpected));
+  self.AssertHasValue(ValueExpected);
+
+  Result := Self;
+END;
+
+
 FUNCTION TMatchAsserter.AssertStartLength(StartExpected, LengthExpected : Integer) : TMatchAsserter;
 BEGIN
   VAR StopExpected := StartExpected + LengthExpected;
@@ -266,6 +405,62 @@ BEGIN
 END;
 
 
+
+
+{ TGroupAsserter }
+
+CONSTRUCTOR TGroupAsserter.Create(AMatch: TRegExGroup);
+BEGIN
+  FTheGroup := AMatch;
+END;
+
+
+FUNCTION TGroupAsserter.AssertHasValue(CONST ValueExpected: STRING): TGroupAsserter;
+BEGIN
+  Assert.AreEqual(ValueExpected, FTheGroup.Value, 'for Group.Value');
+
+  Result := self;
+END;
+
+
+FUNCTION TGroupAsserter.AssertIsSuccess(SuccessExpected: BOOLEAN): TGroupAsserter;
+BEGIN
+  Assert.AreEqual(SuccessExpected, FTheGroup.Success, 'for Group.Success');
+
+  Result := self;
+END;
+
+
+FUNCTION TGroupAsserter.AssertIsZeroLengthAt(StartExpected: Integer): TGroupAsserter;
+BEGIN
+  self.AssertIsSuccess;
+  self.AssertStartLength(StartExpected, 0);
+  self.AssertHasValue('');
+
+  Result := Self;
+END;
+
+
+FUNCTION TGroupAsserter.AssertMatchAt(StartExpected: Integer; CONST ValueExpected: STRING): TGroupAsserter;
+BEGIN
+  self.AssertIsSuccess;
+  self.AssertStartLength(StartExpected, Length(ValueExpected));
+  self.AssertHasValue(ValueExpected);
+
+  Result := Self;
+END;
+
+
+FUNCTION TGroupAsserter.AssertStartLength(StartExpected, LengthExpected: Integer): TGroupAsserter;
+BEGIN
+  VAR StopExpected := StartExpected + LengthExpected;
+
+  Assert.AreEqual(StartExpected , FTheGroup.Start , 'for Group.Start');
+  Assert.AreEqual(StopExpected  , FTheGroup.Stop  , 'for Group.Stop');
+  Assert.AreEqual(LengthExpected, FTheGroup.Length, 'for Group.Length');
+
+  Result := self;
+END;
 
 
 INITIALIZATION
