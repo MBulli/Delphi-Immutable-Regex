@@ -107,6 +107,9 @@ TYPE TPcreBuildConfig = RECORD
     /// Availability of Unicode property support
     PROPERTY UnicodeProperties : Boolean READ FUnicodeProperties;
 
+    CLASS FUNCTION PcreVersion : STRING; STATIC;
+
+    FUNCTION DebugDescription : STRING;
 END;
 
 TYPE TRegExCapture = RECORD
@@ -787,5 +790,69 @@ FUNCTION TRegExGroup.Stop: Integer;
 BEGIN
   Result := FStart + FLength;
 END;
+
+{ TPcreBuildConfig }
+
+CLASS FUNCTION TPcreBuildConfig.PcreVersion: STRING;
+BEGIN
+  Result := STRING(System.RegularExpressionsAPI.pcre_version);
+END;
+
+
+FUNCTION TPcreBuildConfig.DebugDescription: STRING;
+
+  FUNCTION _BoolToStr(ABool : BOOLEAN) : STRING; INLINE;
+  BEGIN
+    IF ABool
+    THEN Result := 'yes'
+    ELSE Result := 'no';
+  END;
+
+BEGIN
+  Result :=          'Pcre version: ' + PcreVersion  + sLineBreak;
+  Result := Result + ' JIT enabled: ' + _BoolToStr(Jit) + sLineBreak;
+  Result := Result + ' JIT target: ' + JitTarget  + sLineBreak;
+  Result := Result + ' Internal link size: ' + LinkSize.ToString  + sLineBreak;
+
+  Result := Result + ' Limits:' + sLineBreak;
+  Result := Result + ' - Parentheses nesting: ' + ParensLimit.ToString + sLineBreak;
+  Result := Result + ' - Internal resource: ' + MatchLimit.ToString + sLineBreak;
+  Result := Result + ' - Internal recursion depth: ' + MatchLimit.ToString + sLineBreak;
+
+  Result := Result + ' Default newline sequence: ';
+  CASE NewLine OF
+    TRegExNewLineMode.Any     : Result := Result + 'Any';
+    TRegExNewLineMode.CR      : Result := Result + 'CR ($0D)';
+    TRegExNewLineMode.LF      : Result := Result + 'LF ($0A)';
+    TRegExNewLineMode.CRLF    : Result := Result + 'CRLF ($0D$0A)';
+    TRegExNewLineMode.AnyCRLF : Result := Result + 'Any CRLF';
+  END;
+  Result := Result + sLineBreak;
+
+  Result := Result + ' \R matches by default: ';
+  CASE Bsr OF
+    0    : Result := Result + 'all Unicode line endings';
+    1    : Result := Result + 'CR, LF, or CRLF only';
+    ELSE   Result := Result + 'INVALID VALUE ' + Bsr.ToString;
+  END;
+  Result := Result + sLineBreak;
+
+  Result := Result + ' PosixMallocThreshold: ' + PosixMallocThreshold.ToString + sLineBreak;
+  Result := Result + ' Recursion implementation: ';
+  CASE StackRecurse OF
+    0    : Result := Result + 'stack';
+    1    : Result := Result + 'heap';
+    ELSE   Result := Result + 'INVALID VALUE ' + Bsr.ToString;
+  END;
+  Result := Result + sLineBreak;
+
+  Result := Result + ' Unicode support:' + sLineBreak;
+  Result := Result + ' - UTF-8: '  + _BoolToStr(Utf8) + sLineBreak;
+  Result := Result + ' - UTF-16: ' + _BoolToStr(Utf16) + sLineBreak;
+  Result := Result + ' - UTF-32: ' + _BoolToStr(Utf32) + sLineBreak;
+  Result := Result + ' - Unicode properties: ' + _BoolToStr(UnicodeProperties) + sLineBreak;
+END;
+
+
 
 END.

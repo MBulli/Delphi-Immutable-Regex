@@ -126,6 +126,8 @@ END;
 
 PROCEDURE TImmutableRegExTest.Test1;
 BEGIN
+  WriteLn(TRegEx.GetPcreBuildConfig.DebugDescription);
+
   VAR R := TRegEx.Create('\b((?<word>\w+)\s*)+(?<end>[.?!])');
   VAR M := R.FirstMatch('This is a sentence. This is a second sentence.');
 
