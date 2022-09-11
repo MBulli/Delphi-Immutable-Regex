@@ -87,6 +87,7 @@
         </DelphiCompile>
         <DCCReference Include="Unit1.pas"/>
         <DCCReference Include="..\ImmutableRegex.pas"/>
+        <DCCReference Include="SplitTests.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

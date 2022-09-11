@@ -14,7 +14,8 @@ uses
   {$ENDIF }
   DUnitX.TestFramework,
   Unit1 in 'Unit1.pas',
-  ImmutableRegex in '..\ImmutableRegex.pas';
+  ImmutableRegex in '..\ImmutableRegex.pas',
+  SplitTests in 'SplitTests.pas';
 
 {$IFNDEF TESTINSIGHT}
 var

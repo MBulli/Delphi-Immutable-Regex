@@ -207,6 +207,13 @@ TYPE IRegEx = INTERFACE
 
   FUNCTION Matches(CONST Input : STRING) : TArray<TRegExMatch>; OVERLOAD;
   FUNCTION Matches(CONST Input : STRING; StartPos : Integer) : TArray<TRegExMatch>; OVERLOAD;
+
+  FUNCTION Split(CONST Input    : STRING) : TArray<STRING>; OVERLOAD;
+  FUNCTION Split(CONST Input    : STRING;
+                       Count    : Integer) : TArray<STRING>; OVERLOAD;
+  FUNCTION Split(CONST Input    : STRING;
+                       Count    : Integer;
+                       StartPos : Integer) : TArray<STRING>; OVERLOAD;
 END;
 
 
@@ -265,6 +272,13 @@ TYPE TRegExImpl = CLASS(TInterfacedObject, IRegEx)
 
     FUNCTION Matches(CONST Input : STRING) : TArray<TRegExMatch>; OVERLOAD;
     FUNCTION Matches(CONST Input : STRING; StartPos : Integer) : TArray<TRegExMatch>; OVERLOAD;
+
+    FUNCTION Split(CONST Input    : STRING) : TArray<STRING>; OVERLOAD;
+    FUNCTION Split(CONST Input    : STRING;
+                         Count    : Integer) : TArray<STRING>; OVERLOAD;
+    FUNCTION Split(CONST Input    : STRING;
+                         Count    : Integer;
+                         StartPos : Integer) : TArray<STRING>; OVERLOAD;
 END;
 
 
@@ -640,6 +654,68 @@ BEGIN
     END;
   END;
 END;
+
+
+
+FUNCTION TRegExImpl.Split(CONST Input: STRING): TArray<STRING>;
+
+  PROCEDURE _AddString(VAR   TheArray  : TArray<STRING>;
+                       VAR   Idx       : INTEGER;
+                       CONST TheString : STRING ); INLINE;
+  BEGIN
+    VAR L := Length(TheArray);
+
+    IF Idx >= L THEN BEGIN
+      SetLength(TheArray, GrowCollection(L, L+1));
+    END;
+
+    TheArray[Idx] := TheString;
+    Inc(Idx);
+  END;
+
+BEGIN
+  IF Input = '' THEN EXIT;
+
+  VAR Matches := Self.Matches(Input);
+
+  VAR Idx    := 0;
+  VAR Offset := 1;
+
+  FOR VAR M IN Matches DO BEGIN
+    IF NOT M.Success THEN CONTINUE;
+
+    VAR S := Copy(Input, Offset, M.Start-Offset);
+
+    _AddString(Result, Idx, S);
+
+    FOR VAR I := 1 TO M.GroupCount-1 DO BEGIN
+      _AddString(Result, Idx, M.Group(I).Value);
+    END;
+
+    Offset := M.Stop;
+  END;
+
+  VAR SEnd := Copy(Input, Offset, Length(Input)-Offset+1);
+  _AddString(Result, Idx, SEnd);
+
+  SetLength(Result, Idx);
+END;
+
+
+FUNCTION TRegExImpl.Split(CONST Input: STRING; Count: Integer): TArray<STRING>;
+BEGIN
+  Result := Split(Input, Count, 1);
+END;
+
+
+FUNCTION TRegExImpl.Split(CONST Input: STRING; Count, StartPos: Integer): TArray<STRING>;
+BEGIN
+  IF NOT IsCompiled THEN RAISE EInvalidOperation.Create('RegEx must be compiled before matched against the input string.');
+  IF NOT InRange(StartPos, 1, Length(Input)) THEN RAISE EArgumentOutOfRangeException.Create('StartPos');
+
+  RAISE ENotImplemented.Create('Split with count is not implemented yet');
+END;
+
 
 { TRegExMatch }
 
