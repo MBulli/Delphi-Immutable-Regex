@@ -43,6 +43,9 @@ TYPE
 
     [Test]
     PROCEDURE TestEmptyMatchGroup;
+
+    [Test]
+    PROCEDURE TestMatchesEmptyInput;
   END;
 
 IMPLEMENTATION
@@ -280,6 +283,16 @@ BEGIN
   TMatchAsserter.Create(Matches[2]).AssertMatchAt(2, '1');
   TMatchAsserter.Create(Matches[3]).AssertIsZeroLengthAt(3);
 END;
+
+
+PROCEDURE TImmutableRegExTest.TestMatchesEmptyInput;
+BEGIN
+  VAR R := TRegEx.Create('a');
+
+  VAR Matches := R.Matches('');
+  Assert.AreEqual(0, Length(Matches));
+END;
+
 
 PROCEDURE TImmutableRegExTest.TestEmptyMatchGroup;
 BEGIN

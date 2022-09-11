@@ -471,7 +471,7 @@ PROCEDURE TRegExImpl.Compile;
 
 BEGIN
   IF IsCompiled THEN EXIT;
-  IF FSource = '' THEN RAISE Exception.Create('Empty RegEx!');
+  IF FSource = '' THEN RAISE Exception.Create('Empty RegEx!');  // TODO is a empty pattern valid? in theory yes
 
   VAR PcreOptions := _GenerateOptions;
   VAR Error       : MarshaledAString;
@@ -534,6 +534,7 @@ FUNCTION TRegExImpl.Matches(CONST Input : STRING; StartPos : Integer) : TArray<T
 
 BEGIN
   IF NOT IsCompiled THEN RAISE EInvalidOperation.Create('RegEx must be compiled before matched against the input string.');
+  IF Length(Input) = 0 THEN EXIT;
   IF NOT InRange(StartPos, 1, Length(Input)) THEN RAISE EArgumentOutOfRangeException.Create('StartPos');
 
   VAR StartOffset := StartPos;
