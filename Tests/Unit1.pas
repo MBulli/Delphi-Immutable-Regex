@@ -34,6 +34,11 @@ TYPE
     [Test]
     PROCEDURE TestStartOffset;
 
+    [Test]
+    PROCEDURE TestZeroLengthMatches1;
+
+    [Test]
+    PROCEDURE TestZeroLengthMatches3;
 
     [Test]
     PROCEDURE TestZeroLengthMatches;
@@ -243,6 +248,36 @@ BEGIN
   Assert.AreEqual('world', M.Value);
 END;
 
+PROCEDURE TImmutableRegExTest.TestZeroLengthMatches1;
+BEGIN
+  // see https://www.regular-expressions.info/zerolength.html
+
+  // Delphi actually returns a empty list in these cases ...
+  // We stick to the behavior of PCRE (and .Net)
+
+  // Match 1 0-0 null
+  // Match 2 1-1 null
+  VAR R := TRegEx.Create('\d*');
+
+  VAR Matches := R.Matches('a');
+  Assert.AreEqual(2, Length(Matches));
+
+  TMatchAsserter.Create(Matches[0]).AssertIsZeroLengthAt(1);
+  TMatchAsserter.Create(Matches[1]).AssertIsZeroLengthAt(2);
+END;
+
+
+PROCEDURE TImmutableRegExTest.TestZeroLengthMatches3;
+BEGIN
+  VAR R := TRegEx.Create('\d*');
+  VAR Matches := R.Matches('1a');
+  Assert.AreEqual(3, Length(Matches));
+
+  TMatchAsserter.Create(Matches[0]).AssertHasValue('1');
+  TMatchAsserter.Create(Matches[1]).AssertIsZeroLengthAt(2);
+  TMatchAsserter.Create(Matches[2]).AssertIsZeroLengthAt(3);
+END;
+
 PROCEDURE TImmutableRegExTest.TestZeroLengthMatches;
 BEGIN
   // see https://www.regular-expressions.info/zerolength.html
@@ -317,7 +352,6 @@ BEGIN
   TMatchAsserter.Create(Matches[0]).AssertIsZeroLengthAt(1).AssertHasGroup(1).AssertIsZeroLengthAt(1);
   TMatchAsserter.Create(Matches[1]).AssertIsZeroLengthAt(2).AssertHasGroup(1).AssertIsZeroLengthAt(2);
   TMatchAsserter.Create(Matches[2]).AssertIsZeroLengthAt(3).AssertHasGroup(1).AssertIsZeroLengthAt(3);
-
 END;
 
 // <(.*?)>

@@ -249,6 +249,9 @@ TYPE TRegExImpl = CLASS(TInterfacedObject, IRegEx)
                          StartPos : Integer;
                          Options  : Integer = 0) : Integer;
 
+    FUNCTION MatchNext(CONST Input     : STRING;
+                       VAR   Output    : TRegExMatch;
+                             Offset    : Integer) : Integer;
 
   PUBLIC
     CONSTRUCTOR Create(CONST Source          : STRING;
@@ -552,18 +555,59 @@ BEGIN
   IF NOT InRange(StartPos, 1, Length(Input)) THEN RAISE EArgumentOutOfRangeException.Create('StartPos');
 
   VAR StartOffset := StartPos;
-  VAR LastMatch   : TRegExMatch;
+  VAR LastMatch   := Default(TRegExMatch);
 
-  VAR RC := Match(Input, LastMatch, StartOffset);
-  // TODO If RC > 0
-  _AddToResult(LastMatch);
-
-  // Loop for second and subsequent matches
   WHILE True DO BEGIN
-    VAR Options := 0;
+    MatchNext(Input, LastMatch, StartOffset);
 
-    IF LastMatch.Success THEN BEGIN
-      StartOffset := LastMatch.Stop; // Start at end of previous match
+    IF NOT LastMatch.Success THEN BREAK;
+
+    _AddToResult(LastMatch);
+    StartOffset := LastMatch.Stop;
+  END;
+END;
+
+FUNCTION TRegExImpl.MatchNext(CONST Input  : STRING;
+                              VAR   Output : TRegExMatch;
+                                    Offset : Integer) : Integer;
+BEGIN
+  VAR LastMatch := Output;
+  Output := Default(TRegExMatch);
+
+  // see PCRE_NOTEMPTY_ATSTART in http://www.pcre.org/pcre.txt
+  VAR LastMatchWasNullString := False;
+
+  // If the previous match was for an empty string, we are finished if we are
+  // at the end of the subject. Otherwise, arrange to run another match at the
+  // same point to see if a non-empty match can be found.
+  IF LastMatch.Success AND (LastMatch.Length = 0) THEN BEGIN
+    IF LastMatch.Start = Length(Input)+1 THEN BEGIN
+      EXIT(0);
+    END;
+
+    LastMatchWasNullString := True;
+  END;
+
+  // Next match
+  Result := Match(Input, LastMatch, Offset, IfThen(LastMatchWasNullString, PCRE_NOTEMPTY_ATSTART OR PCRE_ANCHORED, 0));
+
+  // Empty match?
+  IF Result = PCRE_ERROR_NOMATCH THEN BEGIN
+    IF NOT LastMatchWasNullString THEN BEGIN
+      // If the last match was not a null string and we match a null string now,
+      // it's a valid match and we're done.
+      EXIT;
+    END;
+
+    Inc(Offset);
+
+    IF     FCRLFIsNewLine
+       AND (Offset <= Length(Input) - 1)
+       AND (Input[Offset] = #13)
+       AND (Input[Offset+1] = #10) THEN
+    BEGIN
+      // we are at CRLF, advance by one more.
+      Inc(Offset);
     END;
 
     // If the previous match was for an empty string, we are finished if we are
@@ -571,47 +615,20 @@ BEGIN
     // same point to see if a non-empty match can be found.
     IF LastMatch.Success AND (LastMatch.Length = 0) THEN BEGIN
       IF LastMatch.Start = Length(Input)+1 THEN BEGIN
-        BREAK;
+        EXIT(0);
       END;
-
-      Options := PCRE_NOTEMPTY_ATSTART OR PCRE_ANCHORED;
     END;
+
+    // Match again after zero length match aka null string
+    LastMatchWasNullString := NOT LastMatchWasNullString;
 
     // Next match
-    RC := Match(Input, LastMatch, StartOffset, Options);
-
-    // Empty match?
-    IF RC = PCRE_ERROR_NOMATCH THEN BEGIN
-      IF Options = 0 THEN BEGIN
-        // All matches found
-        BREAK;
-      END;
-
-      Inc(StartOffset);
-
-      IF     FCRLFIsNewLine
-         AND (StartOffset <= Length(Input) - 1)
-         AND (Input[StartOffset] = #13)
-         AND (Input[StartOffset+1] = #10) THEN
-      BEGIN
-        // we are at CRLF, advance by one more.
-        Inc(StartOffset);
-      END;
-
-      CONTINUE; // Go round the loop again
-    END;
-
-    // Error?
-    IF RC < 0 THEN BEGIN
-      // ERROR!
-    END;
-
-    // Match succeeded
-    _AddToResult(LastMatch);
+    Result := Match(Input, LastMatch, Offset, IfThen(LastMatchWasNullString, PCRE_NOTEMPTY_ATSTART OR PCRE_ANCHORED, 0));
   END;
 
+  // Match succeeded
+  Output := LastMatch;
 END;
-
 
 
 FUNCTION TRegExImpl.Match(CONST Input : STRING; VAR Output : TRegExMatch; StartPos, Options : Integer) : Integer;
@@ -652,6 +669,17 @@ BEGIN
         Output.FCaptures[Integer(Num)].FName := Name;
       END;
     END;
+  END
+  ELSE IF Result = PCRE_ERROR_NOMATCH THEN BEGIN
+    // No error, we just have an empty Output record.
+    // Actually, MatchNext() needs this return code for its logic, so just exit.
+    EXIT;
+  END
+  ELSE IF Result < 0 THEN BEGIN
+    Exception.CreateFmt('pcre_exec returned error code %d.', [Result]); // TODO custom exception type and error description
+  END
+  ELSE BEGIN
+    Assert(Result=0); // TODO Result > 0: number of captured; Result < 0 error; Has Result = 0 a meaning?
   END;
 END;
 
